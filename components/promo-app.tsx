@@ -10,6 +10,11 @@ import {
   type HeroId,
 } from "@/lib/heroes";
 import { formatTrips } from "@/lib/plural";
+import {
+  detectShareFamily,
+  sharePayloads,
+  sharePost,
+} from "@/lib/share";
 import { ticketUrl, type TicketContent } from "@/lib/utm";
 import type { Counts } from "@/lib/vote-rules";
 import { IntroScroll } from "./intro-scroll";
@@ -20,6 +25,19 @@ type VotePhase = "anim" | "waiting" | "error";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function canShareData(data: ShareData) {
+  if (typeof navigator.canShare !== "function") return true;
+  try {
+    return navigator.canShare(data);
+  } catch {
+    return false;
+  }
+}
+
+function isShareAbort(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function Stars() {
@@ -128,7 +146,7 @@ export function PromoApp({
   const [selected, setSelected] = useState<HeroId | null>(null);
   const [stats, setStats] = useState<Counts | null>(initialStats);
   const [vote, setVote] = useState<{ hero: HeroId; phase: VotePhase } | null>(null);
-  const [copied, setCopied] = useState<"ok" | "manual" | null>(null);
+  const [copied, setCopied] = useState<"ok" | "post" | "link" | "manual" | null>(null);
   const [manualUrl, setManualUrl] = useState("");
   const lock = useRef(false);
   const reduced = useReducedMotion();
@@ -228,28 +246,41 @@ export function PromoApp({
       setCopied("ok");
     } catch {
       setManualUrl(url);
-      setCopied("manual");
+      setCopied("link");
     }
   }
 
   async function share(hero: HeroId) {
-    const heroData = HEROES[hero];
+    const message = HEROES[hero].shareText;
     const url = currentUrl(hero);
+    const post = sharePost(message, url);
     trackShare("bm_share_click", hero);
+    setCopied(null);
+
+    const family = detectShareFamily({
+      userAgent: navigator.userAgent,
+      maxTouchPoints: navigator.maxTouchPoints ?? 0,
+    });
+
     if (typeof navigator.share === "function") {
-      try {
-        await navigator.share({
-          title: "Битва моторов",
-          text: heroData.shareText,
-          url,
-        });
-        return;
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") return;
+      for (const payload of sharePayloads(family, message, url)) {
+        if (!canShareData(payload)) continue;
+        try {
+          await navigator.share(payload);
+          return;
+        } catch (error) {
+          if (isShareAbort(error)) return;
+        }
       }
     }
-    setManualUrl(url);
-    setCopied("manual");
+
+    try {
+      await navigator.clipboard.writeText(post);
+      setCopied("post");
+    } catch {
+      setManualUrl(post);
+      setCopied("manual");
+    }
   }
 
   return (
@@ -370,7 +401,7 @@ function Result({
 }: {
   hero: HeroId;
   stats: Counts | null;
-  copied: "ok" | "manual" | null;
+  copied: "ok" | "post" | "link" | "manual" | null;
   shareUrl: string;
   onShare: () => void;
   onCopy: () => void;
@@ -413,9 +444,20 @@ function Result({
           </button>
           <p className="copy-note" aria-live="polite">
             {copied === "ok" ? "Ссылка скопирована" : ""}
+            {copied === "post" ? "Сообщение скопировано" : ""}
+            {copied === "manual" ? "Скопируй сообщение и отправь его" : ""}
           </p>
-          {copied === "manual" ? (
+          {copied === "link" ? (
             <input className="copy-link" readOnly value={shareUrl} aria-label="Ссылка для копирования" />
+          ) : null}
+          {copied === "manual" ? (
+            <textarea
+              className="copy-link"
+              readOnly
+              rows={3}
+              value={shareUrl}
+              aria-label="Сообщение для отправки"
+            />
           ) : null}
           <button type="button" className="btn btn-quiet" onClick={onOther}>
             ВЫБРАТЬ ДРУГОГО ГЕРОЯ

@@ -20,17 +20,26 @@ export async function generateMetadata({
   return {
     title: { absolute: `${data.name} — Битва моторов` },
     description: data.shareText,
+    alternates: { canonical: `/p/${hero}` },
     openGraph: {
-      title: "Битва моторов",
-      description: data.shareText,
-      images: [{ url: data.og, width: 1200, height: 630, alt: data.name }],
+      title: data.shareText,
+      description: "А с кем отправишься ты?",
+      url: `/p/${hero}`,
+      images: [
+        {
+          url: data.og,
+          width: 1200,
+          height: 630,
+          alt: `${data.actor}, ${data.name}`,
+        },
+      ],
       locale: "ru_RU",
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: "Битва моторов",
-      description: data.shareText,
+      title: data.shareText,
+      description: "А с кем отправишься ты?",
       images: [data.og],
     },
   };

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --experimental-strip-types --test lib/rules.test.ts tests/rules.test.ts"
+    "test": "node --experimental-strip-types --test lib/rules.test.ts tests/rules.test.ts tests/share.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.3.3",
