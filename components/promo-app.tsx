@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { trackShare } from "@/lib/analytics";
 import {
   HEROES,
@@ -10,11 +10,7 @@ import {
   type HeroId,
 } from "@/lib/heroes";
 import { formatTrips } from "@/lib/plural";
-import {
-  detectShareFamily,
-  sharePayloads,
-  sharePost,
-} from "@/lib/share";
+import { sharePost, telegramShareUrl, vkShareUrl } from "@/lib/share";
 import { ticketUrl, type TicketContent } from "@/lib/utm";
 import type { Counts } from "@/lib/vote-rules";
 import { IntroScroll } from "./intro-scroll";
@@ -25,19 +21,6 @@ type VotePhase = "anim" | "waiting" | "error";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function canShareData(data: ShareData) {
-  if (typeof navigator.canShare !== "function") return true;
-  try {
-    return navigator.canShare(data);
-  } catch {
-    return false;
-  }
-}
-
-function isShareAbort(error: unknown) {
-  return error instanceof Error && error.name === "AbortError";
 }
 
 function Stars() {
@@ -146,15 +129,18 @@ export function PromoApp({
   const [selected, setSelected] = useState<HeroId | null>(null);
   const [stats, setStats] = useState<Counts | null>(initialStats);
   const [vote, setVote] = useState<{ hero: HeroId; phase: VotePhase } | null>(null);
-  const [copied, setCopied] = useState<"ok" | "post" | "link" | "manual" | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [copied, setCopied] = useState<"ok" | "manual" | null>(null);
   const [manualUrl, setManualUrl] = useState("");
   const lock = useRef(false);
+  const closeShare = useCallback(() => setShareOpen(false), []);
   const reduced = useReducedMotion();
   const skipIntro = useRef(false);
 
   function goHome() {
     skipIntro.current = false;
     setVote(null);
+    setShareOpen(false);
     lock.current = false;
     if (window.location.hash) {
       window.history.replaceState(null, "", window.location.pathname);
@@ -238,45 +224,20 @@ export function PromoApp({
     return `${window.location.origin}${sharePath(hero)}`;
   }
 
-  async function copyLink(hero: HeroId) {
-    const url = currentUrl(hero);
-    try {
-      await navigator.clipboard.writeText(url);
-      trackShare("bm_copy_success", hero);
-      setCopied("ok");
-    } catch {
-      setManualUrl(url);
-      setCopied("link");
-    }
+  function openShare(hero: HeroId) {
+    setCopied(null);
+    setManualUrl("");
+    setShareOpen(true);
+    trackShare("bm_share_click", hero);
   }
 
-  async function share(hero: HeroId) {
-    const message = HEROES[hero].shareText;
-    const url = currentUrl(hero);
-    const post = sharePost(message, url);
-    trackShare("bm_share_click", hero);
-    setCopied(null);
-
-    const family = detectShareFamily({
-      userAgent: navigator.userAgent,
-      maxTouchPoints: navigator.maxTouchPoints ?? 0,
-    });
-
-    if (typeof navigator.share === "function") {
-      for (const payload of sharePayloads(family, message, url)) {
-        if (!canShareData(payload)) continue;
-        try {
-          await navigator.share(payload);
-          return;
-        } catch (error) {
-          if (isShareAbort(error)) return;
-        }
-      }
-    }
-
+  async function copyShare(hero: HeroId) {
+    const post = sharePost(HEROES[hero].shareText, currentUrl(hero));
     try {
       await navigator.clipboard.writeText(post);
-      setCopied("post");
+      trackShare("bm_copy_success", hero);
+      setManualUrl("");
+      setCopied("ok");
     } catch {
       setManualUrl(post);
       setCopied("manual");
@@ -343,13 +304,11 @@ export function PromoApp({
         <Result
           hero={selected}
           stats={stats}
-          copied={copied}
-          shareUrl={manualUrl}
-          onShare={() => void share(selected)}
-          onCopy={() => void copyLink(selected)}
+          onShare={() => openShare(selected)}
           onHome={goHome}
           onOther={() => {
             skipIntro.current = true;
+            setShareOpen(false);
             setScreen("start");
           }}
           onReload={() => void reloadStats()}
@@ -358,6 +317,18 @@ export function PromoApp({
 
       {screen === "friend" && friendHero ? (
         <Friend hero={friendHero} stats={stats} onReload={() => void reloadStats()} onHome={goHome} />
+      ) : null}
+
+      {shareOpen && selected ? (
+        <ShareSheet
+          message={HEROES[selected].shareText}
+          pageUrl={currentUrl(selected)}
+          imageUrl={`${window.location.origin}${HEROES[selected].og}`}
+          copied={copied}
+          manualText={manualUrl}
+          onCopy={() => void copyShare(selected)}
+          onClose={closeShare}
+        />
       ) : null}
 
       {vote ? (
@@ -391,20 +362,14 @@ export function PromoApp({
 function Result({
   hero,
   stats,
-  copied,
-  shareUrl,
   onShare,
-  onCopy,
   onOther,
   onReload,
   onHome,
 }: {
   hero: HeroId;
   stats: Counts | null;
-  copied: "ok" | "post" | "link" | "manual" | null;
-  shareUrl: string;
   onShare: () => void;
-  onCopy: () => void;
   onOther: () => void;
   onReload: () => void;
   onHome: () => void;
@@ -439,26 +404,6 @@ function Result({
           <button type="button" className="btn btn-line" onClick={onShare}>
             ПОДЕЛИТЬСЯ СВОИМ ВЫБОРОМ
           </button>
-          <button type="button" className="btn btn-line" onClick={onCopy}>
-            Скопировать ссылку
-          </button>
-          <p className="copy-note" aria-live="polite">
-            {copied === "ok" ? "Ссылка скопирована" : ""}
-            {copied === "post" ? "Сообщение скопировано" : ""}
-            {copied === "manual" ? "Скопируй сообщение и отправь его" : ""}
-          </p>
-          {copied === "link" ? (
-            <input className="copy-link" readOnly value={shareUrl} aria-label="Ссылка для копирования" />
-          ) : null}
-          {copied === "manual" ? (
-            <textarea
-              className="copy-link"
-              readOnly
-              rows={3}
-              value={shareUrl}
-              aria-label="Сообщение для отправки"
-            />
-          ) : null}
           <button type="button" className="btn btn-quiet" onClick={onOther}>
             ВЫБРАТЬ ДРУГОГО ГЕРОЯ
           </button>
@@ -512,5 +457,111 @@ function Friend({
         <BrandFooter onHome={onHome} />
       </div>
     </article>
+  );
+}
+
+function ShareSheet({
+  message,
+  pageUrl,
+  imageUrl,
+  copied,
+  manualText,
+  onCopy,
+  onClose,
+}: {
+  message: string;
+  pageUrl: string;
+  imageUrl: string;
+  copied: "ok" | "manual" | null;
+  manualText: string;
+  onCopy: () => void;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = dialogRef.current;
+    const previously = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    node?.querySelector<HTMLElement>("a,button")?.focus();
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !node) return;
+      const items = [...node.querySelectorAll<HTMLElement>("a,button,textarea,input")];
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+      previously?.focus();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        className="overlay-card share-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2 id="share-title">ПОДЕЛИТЬСЯ</h2>
+        <div className="stack">
+          <a
+            className="btn"
+            href={telegramShareUrl(message, pageUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Телеграм
+          </a>
+          <a
+            className="btn btn-line"
+            href={vkShareUrl(message, pageUrl, imageUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ВКонтакте
+          </a>
+          <button type="button" className="btn btn-line" onClick={onCopy}>
+            Скопировать
+          </button>
+          <p className="copy-note" aria-live="polite">
+            {copied === "ok" ? "Сообщение скопировано" : ""}
+            {copied === "manual" ? "Скопируй сообщение и отправь его" : ""}
+          </p>
+          {copied === "manual" ? (
+            <textarea
+              className="copy-link"
+              readOnly
+              rows={3}
+              value={manualText}
+              aria-label="Сообщение для отправки"
+            />
+          ) : null}
+          <button type="button" className="btn btn-quiet" onClick={onClose}>
+            Закрыть
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

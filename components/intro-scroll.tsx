@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-const FRAMES = 20;
+const FRAMES = 30;
 
 function frameSrc(kind: "desktop" | "mobile", index: number) {
   const n = String(index + 1).padStart(3, "0");
@@ -22,19 +22,17 @@ export function IntroScroll() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let kind: "desktop" | "mobile" = window.matchMedia("(min-width: 840px)")
-      .matches
+    let kind: "desktop" | "mobile" = window.matchMedia("(min-width: 840px)").matches
       ? "desktop"
       : "mobile";
     let images: HTMLImageElement[] = [];
-    let index = 0;
+    let target = 0;
+    let shown = 0;
+    let raf = 0;
 
-    const draw = () => {
-      const img = images[index];
+    const cover = (img: HTMLImageElement) => {
       const w = canvas.width;
       const h = canvas.height;
-      ctx.clearRect(0, 0, w, h);
-      if (!img || !img.complete || img.naturalWidth === 0) return;
       const ir = img.naturalWidth / img.naturalHeight;
       const cr = w / h;
       let dw: number;
@@ -55,14 +53,50 @@ export function IntroScroll() {
       ctx.drawImage(img, dx, dy, dw, dh);
     };
 
+    const paint = (progress: number) => {
+      const exact = progress * (FRAMES - 1);
+      const base = Math.min(FRAMES - 1, Math.floor(exact));
+      const frac = exact - base;
+      const next = Math.min(FRAMES - 1, base + 1);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const first = images[base];
+      const second = images[next];
+      ctx.globalAlpha = 1;
+      if (first?.complete && first.naturalWidth > 0) cover(first);
+      if (next !== base && frac > 0 && second?.complete && second.naturalWidth > 0) {
+        ctx.globalAlpha = frac;
+        cover(second);
+      }
+      ctx.globalAlpha = 1;
+      if (cueRef.current) {
+        cueRef.current.style.opacity = String(Math.max(0, 1 - progress * 6));
+      }
+    };
+
+    const step = () => {
+      const delta = target - shown;
+      if (Math.abs(delta) < 0.0015) {
+        shown = target;
+        paint(shown);
+        raf = 0;
+        return;
+      }
+      shown += delta * 0.28;
+      paint(shown);
+      raf = requestAnimationFrame(step);
+    };
+
+    const kick = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(step);
+    };
+
     const load = (nextKind: typeof kind) => {
       kind = nextKind;
       images = Array.from({ length: FRAMES }, (_, i) => {
         const img = new Image();
         img.src = frameSrc(kind, i);
-        img.onload = () => {
-          if (i === index) draw();
-        };
+        img.onload = () => paint(shown);
         return img;
       });
     };
@@ -72,41 +106,38 @@ export function IntroScroll() {
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-      draw();
+      paint(shown);
     };
 
-    const onScroll = () => {
+    const readProgress = () => {
       const rect = track.getBoundingClientRect();
       const scrollable = rect.height - window.innerHeight;
       const scrolled = Math.min(Math.max(-rect.top, 0), Math.max(scrollable, 0));
-      const progress = scrollable > 0 ? scrolled / scrollable : 0;
-      const next = Math.min(FRAMES - 1, Math.round(progress * (FRAMES - 1)));
-      if (cueRef.current) {
-        cueRef.current.style.opacity = String(Math.max(0, 1 - progress * 6));
-      }
-      if (next !== index) {
-        index = next;
-        draw();
-      }
+      return scrollable > 0 ? scrolled / scrollable : 0;
+    };
+
+    const onScroll = () => {
+      target = readProgress();
+      kick();
     };
 
     const onResize = () => {
-      const nextKind = window.matchMedia("(min-width: 840px)").matches
-        ? "desktop"
-        : "mobile";
+      const nextKind = window.matchMedia("(min-width: 840px)").matches ? "desktop" : "mobile";
       if (nextKind !== kind) load(nextKind);
       resize();
       onScroll();
     };
 
     load(kind);
+    shown = readProgress();
+    target = shown;
     resize();
-    onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 

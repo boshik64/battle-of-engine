@@ -54,7 +54,7 @@ a {
 }
 
 .intro-track {
-  height: 320vh;
+  height: 480vh;
   position: relative;
   background: #0c0b09;
 }
@@ -442,6 +442,20 @@ textarea.copy-link {
   margin: 14px 0 0;
   font-size: 16px;
   line-height: 1.35;
+}
+
+.share-sheet {
+  width: min(420px, 100%);
+  background: #14110e;
+  border: 1px solid rgba(244, 239, 228, 0.28);
+  padding: 22px 18px 14px;
+}
+
+.share-sheet h2 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
 }
 
 .gauge-frame {
