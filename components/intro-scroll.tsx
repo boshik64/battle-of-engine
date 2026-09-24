@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 
-const FRAMES = 30;
+const FRAMES = 20;
 
 function frameSrc(kind: "desktop" | "mobile", index: number) {
   const n = String(index + 1).padStart(3, "0");
