@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const FRAMES = 20;
 
@@ -9,10 +9,60 @@ function frameSrc(kind: "desktop" | "mobile", index: number) {
   return `/scroll/${kind}/ezgif-frame-${n}.jpg`;
 }
 
+function RaceFlag() {
+  const cells = [];
+  for (let y = 0; y < 4; y += 1) {
+    for (let x = 0; x < 5; x += 1) {
+      if ((x + y) % 2 === 0) {
+        cells.push(<rect key={`${x}-${y}`} x={x * 4} y={y * 4} width="4" height="4" fill="currentColor" />);
+      }
+    }
+  }
+  return (
+    <svg viewBox="0 0 28 26" width="30" height="28" aria-hidden="true">
+      <path d="M3 1.5v23" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <g transform="translate(5,2)" clipPath="url(#race-flag-clip)">
+        {cells}
+      </g>
+      <defs>
+        <clipPath id="race-flag-clip">
+          <path d="M0 0h18l-1.6 4 1.6 4-1.6 4 1.6 4H0V0z" />
+        </clipPath>
+      </defs>
+    </svg>
+  );
+}
+
 export function IntroScroll() {
   const trackRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const cueRef = useRef<HTMLParagraphElement>(null);
+  const startRef = useRef<HTMLButtonElement>(null);
+  const playing = useRef(false);
+  const [started, setStarted] = useState(false);
+
+  function playToChoice() {
+    const choice = document.getElementById("vybor");
+    if (!choice || playing.current) return;
+    playing.current = true;
+    setStarted(true);
+    const targetY = choice.getBoundingClientRect().top + window.scrollY;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      window.scrollTo({ top: targetY, behavior: "auto" });
+      return;
+    }
+    const startY = window.scrollY;
+    const distance = targetY - startY;
+    const duration = 2000;
+    const t0 = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      const eased = t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+      window.scrollTo(0, startY + distance * eased);
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -31,6 +81,8 @@ export function IntroScroll() {
     let raf = 0;
 
     const cover = (img: HTMLImageElement) => {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       const w = canvas.width;
       const h = canvas.height;
       const ir = img.naturalWidth / img.naturalHeight;
@@ -68,8 +120,10 @@ export function IntroScroll() {
         cover(second);
       }
       ctx.globalAlpha = 1;
-      if (cueRef.current) {
-        cueRef.current.style.opacity = String(Math.max(0, 1 - progress * 6));
+      const fade = Math.max(0, 1 - progress * 6);
+      if (startRef.current && !playing.current) {
+        startRef.current.style.opacity = String(fade);
+        startRef.current.style.pointerEvents = fade < 0.2 ? "none" : "auto";
       }
     };
 
@@ -149,9 +203,12 @@ export function IntroScroll() {
           <img src="/scroll/mobile/ezgif-frame-001.jpg" alt="Битва моторов" />
         </picture>
         <canvas ref={canvasRef} className="intro-canvas" aria-hidden="true" />
-        <p ref={cueRef} className="intro-cue">
-          листай
-        </p>
+        {started ? null : (
+          <button ref={startRef} type="button" className="intro-start" onClick={playToChoice}>
+            <RaceFlag />
+            Старт
+          </button>
+        )}
       </div>
     </section>
   );
