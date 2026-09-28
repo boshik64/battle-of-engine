@@ -19,10 +19,13 @@ test("текст шаринга называет актёра", () => {
 });
 
 test("телеграм получает фразу и ссылку на страницу героя", () => {
-  const parsed = new URL(telegramShareUrl(message, url));
+  const href = telegramShareUrl(message, url);
+  const parsed = new URL(href);
   assert.equal(parsed.origin + parsed.pathname, "https://t.me/share/url");
   assert.equal(parsed.searchParams.get("text"), message);
   assert.equal(parsed.searchParams.get("url"), url);
+  assert.match(href, /text=%D0%AF%20%D0%BF%D0%BE%D0%B5%D0%B4%D1%83/);
+  assert.equal(href.includes("+"), false);
 });
 
 test("вк получает фразу, ссылку и картинку героя", () => {

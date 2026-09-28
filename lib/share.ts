@@ -3,8 +3,9 @@ export function sharePost(message: string, url: string) {
 }
 
 export function telegramShareUrl(message: string, url: string) {
-  const params = new URLSearchParams({ url, text: message });
-  return `https://t.me/share/url?${params.toString()}`;
+  // Пробел через %20. URLSearchParams ставит «+», и приложение Telegram на телефоне
+  // показывает плюсы в тексте сообщения.
+  return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(message)}`;
 }
 
 export function vkShareUrl(message: string, url: string, imageUrl: string) {
