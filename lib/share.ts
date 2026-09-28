@@ -2,13 +2,12 @@ export function sharePost(message: string, url: string) {
   return `${message}\n${url}`;
 }
 
-export function telegramShareUrl(message: string, url: string, embedLink = false) {
+export function telegramShareUrl(message: string, url: string) {
   // Пробел через %20. URLSearchParams ставит «+», и приложение Telegram на телефоне
   // показывает плюсы в тексте сообщения.
-  // Мобильное приложение отбрасывает параметр url и вставляет только text,
-  // поэтому на телефоне ссылку кладём в сам текст.
-  const text = embedLink ? `${message}\n${url}` : message;
-  return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  // Ссылку передаём только параметром url: приложение само ставит её в начало.
+  // Если продублировать адрес в text, в сообщении будут две одинаковые ссылки.
+  return `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(message)}`;
 }
 
 export function vkShareUrl(message: string, url: string, imageUrl: string) {

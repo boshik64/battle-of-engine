@@ -28,12 +28,10 @@ test("телеграм получает фразу и ссылку на стра
   assert.equal(href.includes("+"), false);
 });
 
-test("на телефоне ссылка лежит в тексте сообщения", () => {
-  const href = telegramShareUrl(message, url, true);
-  const parsed = new URL(href);
-  assert.equal(parsed.searchParams.get("text"), `${message}\n${url}`);
-  assert.equal(parsed.searchParams.get("url"), url);
-  assert.equal(href.includes("+"), false);
+test("в тексте телеграма нет второй копии ссылки", () => {
+  const text = new URL(telegramShareUrl(message, url)).searchParams.get("text");
+  assert.equal(text, message);
+  assert.equal(text?.includes(url), false);
 });
 
 test("вк получает фразу, ссылку и картинку героя", () => {
