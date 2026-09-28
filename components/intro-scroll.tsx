@@ -45,7 +45,12 @@ export function IntroScroll() {
     if (!choice || playing.current) return;
     playing.current = true;
     setStarted(true);
-    const targetY = choice.getBoundingClientRect().top + window.scrollY;
+    const track = trackRef.current;
+    const pin = track?.querySelector<HTMLElement>(".intro-sticky");
+    const targetY =
+      track && pin
+        ? track.offsetTop + track.offsetHeight - pin.offsetHeight
+        : choice.getBoundingClientRect().top + window.scrollY;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
       window.scrollTo({ top: targetY, behavior: "auto" });
@@ -57,7 +62,7 @@ export function IntroScroll() {
     const t0 = performance.now();
     const tick = (now: number) => {
       const t = Math.min(1, (now - t0) / duration);
-      const eased = t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+      const eased = 1 - (1 - t) ** 3;
       window.scrollTo(0, startY + distance * eased);
       if (t < 1) requestAnimationFrame(tick);
     };
@@ -76,9 +81,7 @@ export function IntroScroll() {
       ? "desktop"
       : "mobile";
     let images: HTMLImageElement[] = [];
-    let target = 0;
     let shown = 0;
-    let raf = 0;
 
     const cover = (img: HTMLImageElement) => {
       ctx.imageSmoothingEnabled = true;
@@ -127,24 +130,6 @@ export function IntroScroll() {
       }
     };
 
-    const step = () => {
-      const delta = target - shown;
-      if (Math.abs(delta) < 0.0015) {
-        shown = target;
-        paint(shown);
-        raf = 0;
-        return;
-      }
-      shown += delta * 0.28;
-      paint(shown);
-      raf = requestAnimationFrame(step);
-    };
-
-    const kick = () => {
-      if (raf) return;
-      raf = requestAnimationFrame(step);
-    };
-
     const load = (nextKind: typeof kind) => {
       kind = nextKind;
       images = Array.from({ length: FRAMES }, (_, i) => {
@@ -164,15 +149,16 @@ export function IntroScroll() {
     };
 
     const readProgress = () => {
-      const rect = track.getBoundingClientRect();
-      const scrollable = rect.height - window.innerHeight;
-      const scrolled = Math.min(Math.max(-rect.top, 0), Math.max(scrollable, 0));
+      const sticky = track.querySelector<HTMLElement>(".intro-sticky");
+      const pin = sticky?.offsetHeight || window.innerHeight;
+      const scrollable = track.offsetHeight - pin;
+      const scrolled = Math.min(Math.max(-track.getBoundingClientRect().top, 0), Math.max(scrollable, 0));
       return scrollable > 0 ? scrolled / scrollable : 0;
     };
 
     const onScroll = () => {
-      target = readProgress();
-      kick();
+      shown = readProgress();
+      paint(shown);
     };
 
     const onResize = () => {
@@ -184,14 +170,12 @@ export function IntroScroll() {
 
     load(kind);
     shown = readProgress();
-    target = shown;
     resize();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
-      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 
