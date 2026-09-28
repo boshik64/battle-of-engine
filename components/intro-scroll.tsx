@@ -45,21 +45,34 @@ export function IntroScroll() {
     if (!choice || playing.current) return;
     playing.current = true;
     setStarted(true);
-    const targetY = choice.getBoundingClientRect().top + window.scrollY;
+    const heroY = choice.getBoundingClientRect().top + window.scrollY;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
-      window.scrollTo({ top: targetY, behavior: "auto" });
+      window.scrollTo({ top: heroY, behavior: "auto" });
       return;
     }
+    const track = trackRef.current;
+    const pin = track?.querySelector<HTMLElement>(".intro-sticky");
+    const pinEnd =
+      track && pin ? track.offsetTop + track.offsetHeight - pin.offsetHeight : heroY;
     const startY = window.scrollY;
-    const distance = targetY - startY;
-    const duration = 2000;
+    const toPin = Math.max(0, pinEnd - startY);
+    const toHero = Math.max(0, heroY - startY);
+    const frameMs = toPin > 8 ? 1500 : 0;
+    const settleMs = 600;
     const t0 = performance.now();
     const tick = (now: number) => {
-      const t = Math.min(1, (now - t0) / duration);
-      const eased = 1 - (1 - t) ** 3;
-      window.scrollTo(0, startY + distance * eased);
-      if (t < 1) requestAnimationFrame(tick);
+      const elapsed = now - t0;
+      let y: number;
+      if (elapsed < frameMs) {
+        y = startY + toPin * (elapsed / frameMs);
+      } else {
+        const u = Math.min(1, (elapsed - frameMs) / settleMs);
+        const eased = 1 - (1 - u) ** 3;
+        y = startY + toPin + (toHero - toPin) * eased;
+      }
+      window.scrollTo(0, y);
+      if (elapsed < frameMs + settleMs) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   }
@@ -76,11 +89,13 @@ export function IntroScroll() {
       ? "desktop"
       : "mobile";
     let images: HTMLImageElement[] = [];
+    let target = 0;
     let shown = 0;
+    let raf = 0;
+    let lastTime = 0;
+    let smooth = window.matchMedia("(min-width: 840px)").matches;
 
     const cover = (img: HTMLImageElement) => {
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
       const w = canvas.width;
       const h = canvas.height;
       const ir = img.naturalWidth / img.naturalHeight;
@@ -108,12 +123,11 @@ export function IntroScroll() {
       const base = Math.min(FRAMES - 1, Math.floor(exact));
       const frac = exact - base;
       const next = Math.min(FRAMES - 1, base + 1);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const first = images[base];
       const second = images[next];
       ctx.globalAlpha = 1;
       if (first?.complete && first.naturalWidth > 0) cover(first);
-      if (next !== base && frac > 0 && second?.complete && second.naturalWidth > 0) {
+      if (next !== base && frac > 0.02 && second?.complete && second.naturalWidth > 0) {
         ctx.globalAlpha = frac;
         cover(second);
       }
@@ -125,12 +139,35 @@ export function IntroScroll() {
       }
     };
 
+    const step = (now: number) => {
+      const dt = Math.max(0, Math.min(34, now - lastTime));
+      lastTime = now;
+      const follow = playing.current || !smooth;
+      if (follow) {
+        shown = target;
+      } else {
+        const delta = target - shown;
+        if (Math.abs(delta) < 0.0015) shown = target;
+        else shown += delta * (1 - Math.exp(-dt / 80));
+      }
+      paint(shown);
+      if (Math.abs(target - shown) >= 0.0015) raf = requestAnimationFrame(step);
+      else raf = 0;
+    };
+
+    const kick = () => {
+      if (raf) return;
+      lastTime = performance.now();
+      raf = requestAnimationFrame(step);
+    };
+
     const load = (nextKind: typeof kind) => {
       kind = nextKind;
       images = Array.from({ length: FRAMES }, (_, i) => {
         const img = new Image();
+        img.decoding = "async";
         img.src = frameSrc(kind, i);
-        img.onload = () => paint(shown);
+        img.decode?.().then(() => kick()).catch(() => {});
         return img;
       });
     };
@@ -140,6 +177,8 @@ export function IntroScroll() {
       const rect = canvas.getBoundingClientRect();
       canvas.width = Math.max(1, Math.floor(rect.width * dpr));
       canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "medium";
       paint(shown);
     };
 
@@ -152,25 +191,28 @@ export function IntroScroll() {
     };
 
     const onScroll = () => {
-      shown = readProgress();
-      paint(shown);
+      target = readProgress();
+      kick();
     };
 
     const onResize = () => {
       const nextKind = window.matchMedia("(min-width: 840px)").matches ? "desktop" : "mobile";
+      smooth = nextKind === "desktop";
       if (nextKind !== kind) load(nextKind);
       resize();
       onScroll();
     };
 
     load(kind);
-    shown = readProgress();
+    target = readProgress();
+    shown = target;
     resize();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onResize);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 
