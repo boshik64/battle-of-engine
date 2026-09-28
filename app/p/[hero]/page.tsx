@@ -28,6 +28,7 @@ export async function generateMetadata({
       images: [
         {
           url: data.og,
+          type: "image/jpeg",
           width: 1200,
           height: 630,
           alt: `${data.actor}, ${data.name}`,

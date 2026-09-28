@@ -460,6 +460,13 @@ function Friend({
   );
 }
 
+function telegramEmbedsLink() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+  return navigator.maxTouchPoints > 1 && /Macintosh/i.test(ua);
+}
+
 function ShareSheet({
   message,
   pageUrl,
@@ -527,7 +534,7 @@ function ShareSheet({
         <div className="stack">
           <a
             className="btn"
-            href={telegramShareUrl(message, pageUrl)}
+            href={telegramShareUrl(message, pageUrl, telegramEmbedsLink())}
             target="_blank"
             rel="noopener noreferrer"
           >

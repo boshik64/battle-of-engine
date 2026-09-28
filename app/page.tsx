@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     title: "Битва моторов",
     description:
       "Выбирай попутчика и зови друзей — посмотрим, с кем поедет больше зрителей.",
-    images: [{ url: "/og/home.jpg", width: 1200, height: 630, alt: "Битва моторов" }],
+    images: [{ url: "/og/home.jpg", type: "image/jpeg", width: 1200, height: 630, alt: "Битва моторов" }],
     locale: "ru_RU",
     type: "website",
   },

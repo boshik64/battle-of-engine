@@ -45,12 +45,7 @@ export function IntroScroll() {
     if (!choice || playing.current) return;
     playing.current = true;
     setStarted(true);
-    const track = trackRef.current;
-    const pin = track?.querySelector<HTMLElement>(".intro-sticky");
-    const targetY =
-      track && pin
-        ? track.offsetTop + track.offsetHeight - pin.offsetHeight
-        : choice.getBoundingClientRect().top + window.scrollY;
+    const targetY = choice.getBoundingClientRect().top + window.scrollY;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
       window.scrollTo({ top: targetY, behavior: "auto" });

@@ -28,6 +28,14 @@ test("телеграм получает фразу и ссылку на стра
   assert.equal(href.includes("+"), false);
 });
 
+test("на телефоне ссылка лежит в тексте сообщения", () => {
+  const href = telegramShareUrl(message, url, true);
+  const parsed = new URL(href);
+  assert.equal(parsed.searchParams.get("text"), `${message}\n${url}`);
+  assert.equal(parsed.searchParams.get("url"), url);
+  assert.equal(href.includes("+"), false);
+});
+
 test("вк получает фразу, ссылку и картинку героя", () => {
   const parsed = new URL(vkShareUrl(message, url, image));
   assert.equal(parsed.origin + parsed.pathname, "https://vk.com/share.php");
