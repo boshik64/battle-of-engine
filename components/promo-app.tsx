@@ -13,11 +13,31 @@ import { formatTrips } from "@/lib/plural";
 import { sharePost, telegramShareUrl, vkShareUrl } from "@/lib/share";
 import { ticketUrl, type TicketContent } from "@/lib/utm";
 import type { Counts } from "@/lib/vote-rules";
-import { IntroScroll } from "./intro-scroll";
 import { Tachometer, VOTE_ANIM_MS } from "./tachometer";
 
 type Screen = "start" | "result" | "friend";
 type VotePhase = "anim" | "waiting" | "error";
+type RideStep = "gate" | "search" | "drivers" | "meter" | "route" | "card";
+
+const ROUTES = [
+  {
+    id: "near",
+    title: "Ближайший КАРО",
+    note: "Короткий маршрут до кинотеатра рядом",
+  },
+  {
+    id: "center",
+    title: "КАРО в центре",
+    note: "Большой зал, ехать дольше",
+  },
+  {
+    id: "night",
+    title: "Ночной сеанс",
+    note: "Поздний старт и пустые улицы",
+  },
+] as const;
+
+type RouteId = (typeof ROUTES)[number]["id"];
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -126,6 +146,8 @@ export function PromoApp({
   friendHero?: HeroId;
 }) {
   const [screen, setScreen] = useState<Screen>(mode === "friend" ? "friend" : "start");
+  const [step, setStep] = useState<RideStep>("gate");
+  const [routeId, setRouteId] = useState<RouteId | null>(null);
   const [selected, setSelected] = useState<HeroId | null>(null);
   const [stats, setStats] = useState<Counts | null>(initialStats);
   const [vote, setVote] = useState<{ hero: HeroId; phase: VotePhase } | null>(null);
@@ -146,6 +168,8 @@ export function PromoApp({
       window.history.replaceState(null, "", window.location.pathname);
     }
     setScreen("start");
+    setStep("gate");
+    setRouteId(null);
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
@@ -154,15 +178,18 @@ export function PromoApp({
     const toChoice = window.location.hash === "#vybor" || skipIntro.current;
     skipIntro.current = false;
     if (!toChoice) return;
-    const node = document.getElementById("vybor");
-    requestAnimationFrame(() => node?.scrollIntoView({ behavior: "auto" }));
+    setStep("drivers");
   }, [screen]);
 
   useEffect(() => {
-    if (screen === "result" || screen === "friend") {
-      window.scrollTo({ top: 0, behavior: "auto" });
-    }
-  }, [screen]);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, [screen, step]);
+
+  useEffect(() => {
+    if (step !== "search") return;
+    const timer = window.setTimeout(() => setStep("drivers"), reduced ? 250 : 1700);
+    return () => window.clearTimeout(timer);
+  }, [step, reduced]);
 
   async function reloadStats() {
     try {
@@ -179,7 +206,8 @@ export function PromoApp({
     if (lock.current) return;
     lock.current = true;
     setCopied(null);
-    setVote({ hero, phase: reduced ? "waiting" : "anim" });
+    setVote(null);
+    setStep("meter");
 
     let settled = false;
     const request = fetch("/api/vote", {
@@ -196,14 +224,13 @@ export function PromoApp({
         return null;
       });
 
-    if (!reduced) {
-      await sleep(VOTE_ANIM_MS);
-      if (!settled) setVote({ hero, phase: "waiting" });
-    }
+    await sleep(reduced ? 500 : VOTE_ANIM_MS);
+    if (!settled) setVote({ hero, phase: "waiting" });
 
     const response = await request;
     if (!response || !response.ok) {
       setVote({ hero, phase: "error" });
+      setStep("drivers");
       lock.current = false;
       return;
     }
@@ -211,10 +238,12 @@ export function PromoApp({
       const data = (await response.json()) as { counts: Counts };
       setStats(data.counts);
       setSelected(hero);
+      setRouteId(null);
       setVote(null);
-      setScreen("result");
+      setStep("route");
     } catch {
       setVote({ hero, phase: "error" });
+      setStep("drivers");
     } finally {
       lock.current = false;
     }
@@ -244,72 +273,110 @@ export function PromoApp({
     }
   }
 
+  function goDrivers() {
+    setStep("search");
+  }
+
+  function pickRoute(id: RouteId) {
+    if (lock.current) return;
+    lock.current = true;
+    setRouteId(id);
+    window.setTimeout(() => {
+      setStep("card");
+      lock.current = false;
+    }, reduced ? 200 : 1500);
+  }
+
   return (
     <>
-      <a className="skip" href="#vybor">
-        К выбору попутчика
-      </a>
-      {screen === "start" ? <IntroScroll /> : null}
-      {screen === "start" ? (
-        <div id="vybor">
-          <section className="choice-fit" aria-labelledby="choice-title">
-            <HomeLogo src="/brand/logo.webp" className="logo" onHome={goHome} />
-            <h1 id="choice-title" className="choice-title">
-              ВЫБЕРИ, С КЕМ ОТПРАВИШЬСЯ В ПОЕЗДКУ
-            </h1>
-            <div className="cards">
-              {HERO_IDS.map((id) => {
-                const hero = HEROES[id];
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    className="card"
-                    disabled={vote !== null}
-                    onClick={() => void chooseWithWait(id)}
-                  >
-                    <span className="hero-photo">
-                      <img src={hero.image} alt="" />
-                    </span>
-                    <span className="card-meta">
-                      <span className="hero-name">{hero.name}</span>
-                      <span className="hero-actor">{hero.actor}</span>
-                      <span className="card-row">
-                        <Stars />
-                        <TripCount stats={stats} hero={id} />
-                      </span>
-                      <span className="tagline">{hero.tagline}</span>
-                      <span className="card-cta">{hero.button}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-          <div className="below">
-            <p className="explain">
-              Выбирай попутчика и зови друзей — посмотрим, с кем поедет больше зрителей.
-            </p>
-            {!stats ? (
-              <button type="button" className="btn btn-quiet" onClick={() => void reloadStats()}>
-                Обновить статистику
-              </button>
-            ) : null}
-            <BrandFooter buy="buy_ticket" onHome={goHome} />
+      <button type="button" className="skip" onClick={() => setStep("drivers")}>
+        К выбору водителя
+      </button>
+      {screen === "start" && step === "gate" ? (
+        <section className="gate" aria-labelledby="gate-title">
+          <h1 id="gate-title" className="gate-title">
+            Битва моторов
+          </h1>
+          <picture>
+            <source media="(max-width: 839px)" type="image/webp" srcSet="/banners/mobile.webp" />
+            <source media="(max-width: 839px)" srcSet="/banners/mobile.jpg" />
+            <source type="image/webp" srcSet="/banners/desktop.webp" />
+            <img
+              className="gate-poster"
+              src="/banners/desktop.jpg"
+              alt="Постер фильма «Битва моторов»"
+            />
+          </picture>
+          <div className="gate-actions">
+            <button type="button" className="btn gate-go" onClick={goDrivers}>
+              <svg className="taxi-sign" viewBox="0 0 46 24" aria-hidden="true">
+                <rect x="0.6" y="0.6" width="44.8" height="22.8" rx="3.5" fill="#f5c518" stroke="#14110e" strokeWidth="1.2" />
+                <rect x="4" y="4" width="7" height="7" fill="#14110e" />
+                <rect x="18" y="4" width="7" height="7" fill="#14110e" />
+                <rect x="32" y="4" width="7" height="7" fill="#14110e" />
+                <rect x="11" y="11" width="7" height="7" fill="#14110e" />
+                <rect x="25" y="11" width="7" height="7" fill="#14110e" />
+              </svg>
+              Газуем
+            </button>
           </div>
-        </div>
+        </section>
       ) : null}
 
-      {screen === "result" && selected ? (
+      {screen === "start" && step === "search" ? <SearchStep /> : null}
+
+      {screen === "start" && step === "drivers" ? (
+        <section className="drivers" id="vybor" aria-labelledby="drivers-title">
+          <p className="step-mark">Шаг 2 из 4</p>
+          <h2 id="drivers-title" className="drivers-title">
+            Кто повезёт
+          </h2>
+          <div className="driver-list">
+            {HERO_IDS.map((id) => {
+              const hero = HEROES[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className="driver-card"
+                  disabled={vote !== null}
+                  onClick={() => void chooseWithWait(id)}
+                >
+                  <img className="driver-face" src={hero.face} alt="" />
+                  <div className="driver-main">
+                    <p className="hero-name">{hero.name}</p>
+                    <p className="hero-actor">{hero.actor}</p>
+                    <p className="card-row">
+                      <Stars />
+                      <TripCount stats={stats} hero={id} />
+                    </p>
+                    <span className="card-cta">{hero.button}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {screen === "start" && step === "meter" ? <MeterStep reduced={reduced} /> : null}
+
+      {screen === "start" && step === "route" ? (
+        <RouteStep routeId={routeId} onPick={pickRoute} />
+      ) : null}
+
+      {screen === "start" && step === "card" && selected ? (
         <Result
           hero={selected}
           stats={stats}
+          routeTitle={ROUTES.find((item) => item.id === routeId)?.title}
           onShare={() => openShare(selected)}
           onHome={goHome}
           onOther={() => {
-            skipIntro.current = true;
+            skipIntro.current = false;
             setShareOpen(false);
-            setScreen("start");
+            setRouteId(null);
+            setStep("drivers");
           }}
           onReload={() => void reloadStats()}
         />
@@ -331,27 +398,18 @@ export function PromoApp({
         />
       ) : null}
 
-      {vote ? (
+      {vote?.phase === "error" ? (
         <div className="overlay" role="status" aria-live="polite">
           <div className="overlay-card">
-            {vote.phase === "error" ? (
-              <>
-                <p>Не удалось учесть голос. Попробуй ещё раз</p>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ marginTop: 16 }}
-                  onClick={() => void chooseWithWait(vote.hero)}
-                >
-                  Повторить
-                </button>
-              </>
-            ) : (
-              <>
-                {reduced ? null : <Tachometer />}
-                {vote.phase === "waiting" || reduced ? <p>Учитываем твой выбор…</p> : null}
-              </>
-            )}
+            <p>Не удалось учесть голос. Попробуй ещё раз</p>
+            <button
+              type="button"
+              className="btn"
+              style={{ marginTop: 16 }}
+              onClick={() => void chooseWithWait(vote.hero)}
+            >
+              Повторить
+            </button>
           </div>
         </div>
       ) : null}
@@ -359,9 +417,98 @@ export function PromoApp({
   );
 }
 
+function SearchStep() {
+  return (
+    <section className="ride-step" role="status" aria-live="polite">
+      <div className="road" aria-hidden="true">
+        <div className="road-dashes" />
+        <div className="road-car" />
+      </div>
+      <p className="ride-status">Ищем водителя на линии</p>
+    </section>
+  );
+}
+
+function MeterStep({ reduced }: { reduced: boolean }) {
+  return (
+    <section className="ride-step" role="status" aria-live="polite">
+      <p className="step-mark">Водитель найден</p>
+      {reduced ? null : <Tachometer />}
+      <p className="ride-status">Ваш водитель уже выехал</p>
+    </section>
+  );
+}
+
+const ROUTE_PATHS: Record<RouteId | "ready", string> = {
+  ready: "M48 156 C 100 150, 120 70, 176 86 S 250 48, 300 58",
+  near: "M48 156 C 90 148, 130 110, 168 96 S 230 70, 300 58",
+  center: "M48 156 C 70 40, 150 28, 210 78 S 260 130, 300 58",
+  night: "M48 156 C 130 172, 190 150, 230 108 S 268 36, 300 58",
+};
+
+function RouteMap({ routeId }: { routeId: RouteId | null }) {
+  return (
+    <svg className="route-map" viewBox="0 0 360 200" role="img" aria-label="Маршрут до кинотеатра КАРО">
+      <rect width="360" height="200" rx="16" fill="#161310" />
+      {Array.from({ length: 6 }, (_, i) => (
+        <line key={`h${i}`} x1="16" y1={28 + i * 28} x2="344" y2={28 + i * 28} stroke="#2a261f" strokeWidth="1" />
+      ))}
+      {Array.from({ length: 8 }, (_, i) => (
+        <line key={`v${i}`} x1={28 + i * 44} y1="16" x2={28 + i * 44} y2="184" stroke="#2a261f" strokeWidth="1" />
+      ))}
+      <path
+        className="route-line"
+        d={ROUTE_PATHS[routeId ?? "ready"]}
+        fill="none"
+        stroke="#e91a3b"
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
+      <circle cx="48" cy="156" r="6" fill="#f4efe4" />
+      <path d="M300 28c-7 0-13 6-13 13 0 10 13 22 13 22s13-12 13-22c0-7-6-13-13-13z" fill="#e91a3b" />
+      <circle cx="300" cy="40" r="4" fill="#161310" />
+      <text x="286" y="78" fill="#f4efe4" fontSize="12" fontFamily="inherit" letterSpacing="1.5">
+        КАРО
+      </text>
+    </svg>
+  );
+}
+
+function RouteStep({
+  routeId,
+  onPick,
+}: {
+  routeId: RouteId | null;
+  onPick: (id: RouteId) => void;
+}) {
+  return (
+    <section className="ride-step step-karo" aria-labelledby="route-title">
+      <p className="step-mark">Шаг 3 из 4</p>
+      <p className="karo-mark">КАРО</p>
+      <h2 id="route-title">Куда едем</h2>
+      <RouteMap key={routeId ?? "ready"} routeId={routeId} />
+      <div className="route-list">
+        {ROUTES.map((route) => (
+          <button
+            key={route.id}
+            type="button"
+            className="route-pick"
+            disabled={routeId !== null}
+            onClick={() => onPick(route.id)}
+          >
+            <strong>{route.title}</strong>
+            <span>{route.note}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Result({
   hero,
   stats,
+  routeTitle,
   onShare,
   onOther,
   onReload,
@@ -369,6 +516,7 @@ function Result({
 }: {
   hero: HeroId;
   stats: Counts | null;
+  routeTitle?: string;
   onShare: () => void;
   onOther: () => void;
   onReload: () => void;
@@ -378,34 +526,42 @@ function Result({
   const content: TicketContent =
     hero === "andrey" ? "buy_ticket_andrey" : "buy_ticket_dmitry";
   return (
-    <article className="screen" id="vybor">
-      <img className="scene" src={data.scene} alt={`${data.actor}, ${data.name}`} />
+    <article className="screen result-sheet" id="vybor">
+      <img className={`scene scene-${hero}`} src={data.scene} alt={`${data.actor}, ${data.name}`} />
       <div className="screen-copy">
+        {routeTitle ? <p className="step-mark">Шаг 4 из 4</p> : null}
         <HomeLogo src="/brand/logo.webp" className="logo screen-logo" onHome={onHome} />
         <p className="actor-line">{data.actor}</p>
         <h1>ТЫ ОТПРАВЛЯЕШЬСЯ В ПОЕЗДКУ С {data.withName.toUpperCase()}</h1>
         <p className="kicker">ТЕБЯ ЖДЁТ…</p>
         <p className="awaits">{data.awaits}</p>
-        <div className="stats-block">
-          {HERO_IDS.map((id) => (
-            <p key={id} className="stat-line">
-              <span>{HEROES[id].name}</span>
-              <TripCount stats={stats} hero={id} />
-            </p>
+        {routeTitle ? <p className="route-chosen">Маршрут: {routeTitle}</p> : null}
+        <ul className="traits">
+          {data.traits.map((trait) => (
+            <li key={trait.label}>
+              <span>{trait.label}</span>
+              <span>{trait.value}</span>
+            </li>
           ))}
+        </ul>
+        <div className="stats-block">
+          <p className="stat-line">
+            <span>{data.name}</span>
+            <TripCount stats={stats} hero={hero} />
+          </p>
         </div>
         {!stats ? (
           <button type="button" className="btn btn-quiet" onClick={onReload}>
             Обновить статистику
           </button>
         ) : null}
-        <div className="stack" style={{ marginTop: 18 }}>
+        <div className="stack result-actions" style={{ marginTop: 18 }}>
           <BuyLink content={content} />
           <button type="button" className="btn btn-line" onClick={onShare}>
             ПОДЕЛИТЬСЯ СВОИМ ВЫБОРОМ
           </button>
           <button type="button" className="btn btn-quiet" onClick={onOther}>
-            ВЫБРАТЬ ДРУГОГО ГЕРОЯ
+            ВЫБРАТЬ ДРУГОГО ВОДИТЕЛЯ
           </button>
         </div>
         <BrandFooter onHome={onHome} />
@@ -428,7 +584,7 @@ function Friend({
   const data = HEROES[hero];
   return (
     <article className="screen">
-      <img className="scene" src={data.scene} alt={`${data.actor}, ${data.name}`} />
+      <img className={`scene scene-${hero}`} src={data.scene} alt={`${data.actor}, ${data.name}`} />
       <div className="screen-copy">
         <HomeLogo src="/brand/logo.webp" className="logo screen-logo" onHome={onHome} />
         <p className="actor-line">{data.actor}</p>

@@ -1,4 +1,4 @@
-export const VOTE_ANIM_MS = 1200;
+export const VOTE_ANIM_MS = 3200;
 
 export function Tachometer() {
   const start = -120;
@@ -49,7 +49,7 @@ export function Tachometer() {
           type="rotate"
           from="-120 100 118"
           to="102 100 118"
-          dur="1.2s"
+          dur="3.2s"
           fill="freeze"
         />
         <polygon points="100,46 97,118 103,118" fill="#f4efe4" />
