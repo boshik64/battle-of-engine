@@ -265,6 +265,7 @@ export function PromoApp({
       </button>
       {screen === "start" && step === "gate" ? (
         <section className="gate" aria-labelledby="gate-title">
+          <img className="gate-logo" src="/brand/logo.webp" alt="Битва моторов" />
           <picture>
             <source media="(max-width: 839px)" type="image/webp" srcSet="/banners/mobile.webp" />
             <source media="(max-width: 839px)" srcSet="/banners/mobile.jpg" />
@@ -555,14 +556,16 @@ function Result({
             Обновить статистику
           </button>
         ) : null}
-        <div className="stack result-actions" style={{ marginTop: 18 }}>
-          <BuyLink content={content} />
-          <button type="button" className="btn btn-line" onClick={onShare}>
-            ПОДЕЛИТЬСЯ СВОИМ ВЫБОРОМ
-          </button>
-          <button type="button" className="btn btn-quiet" onClick={onOther}>
-            ВЫБРАТЬ ДРУГОГО ВОДИТЕЛЯ
-          </button>
+        <div className="stack result-actions">
+          <BuyLink content={content} className="btn result-buy" />
+          <div className="result-row">
+            <button type="button" className="btn btn-line" onClick={onShare}>
+              Поделиться
+            </button>
+            <button type="button" className="btn btn-quiet" onClick={onOther}>
+              Выбрать другого
+            </button>
+          </div>
         </div>
         <BrandFooter onHome={onHome} />
       </div>

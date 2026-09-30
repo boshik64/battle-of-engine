@@ -127,13 +127,27 @@ a {
   border: 0;
 }
 
+.gate-logo {
+  position: absolute;
+  z-index: 3;
+  top: max(22px, env(safe-area-inset-top));
+  left: 50%;
+  width: min(280px, 68vw);
+  height: auto;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+}
+
 .gate-poster {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: -24px;
+  width: calc(100% + 48px);
+  height: calc(100% + 48px);
   object-fit: contain;
   object-position: center center;
+  filter: blur(5px);
+  transform: scale(1.04);
 }
 
 @media (max-width: 839px) {
@@ -157,14 +171,15 @@ a {
 
 .gate-lead {
   margin: 0;
-  max-width: 12em;
+  max-width: 11em;
   text-align: center;
   color: #f4efe4;
-  font-size: clamp(26px, 4vw, 40px);
-  line-height: 1.15;
+  font-size: clamp(44px, 6.2vw, 84px);
+  line-height: 1.02;
   font-weight: 700;
+  letter-spacing: -0.03em;
   text-wrap: balance;
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.72);
+  text-shadow: 0 10px 36px rgba(0, 0, 0, 0.55);
 }
 
 .gate-actions .gate-go {
@@ -172,6 +187,11 @@ a {
 }
 
 @media (min-width: 840px) {
+  .gate-logo {
+    top: 28px;
+    width: 360px;
+  }
+
   .gate-actions {
     transform: translateY(7vh);
   }
@@ -184,7 +204,7 @@ a {
   }
 
   .gate-lead {
-    font-size: 26px;
+    font-size: 40px;
   }
 }
 
@@ -193,9 +213,13 @@ a {
   min-height: 64px;
   gap: 12px;
   padding: 12px 28px 12px 22px;
-  border: 1px solid rgba(20, 17, 14, 0.72);
+  border: 1px solid rgba(244, 239, 228, 0.55);
   border-radius: 999px;
-  background: rgba(244, 239, 228, 0.78);
+  background: rgba(244, 239, 228, 0.16);
+  color: #f4efe4;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
   font-size: 18px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -203,14 +227,14 @@ a {
 }
 
 .btn.gate-go:active {
-  background: rgba(244, 239, 228, 0.96);
-  border-color: #14110e;
+  background: rgba(244, 239, 228, 0.32);
+  border-color: rgba(244, 239, 228, 0.8);
 }
 
 @media (hover: hover) {
   .btn.gate-go:hover {
-    background: rgba(244, 239, 228, 0.96);
-    border-color: #14110e;
+    background: rgba(244, 239, 228, 0.28);
+    border-color: rgba(244, 239, 228, 0.8);
   }
 }
 
@@ -1240,9 +1264,33 @@ textarea.copy-link {
 .result-actions .btn-quiet {
   min-height: 52px;
   font-size: 13px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
   color: #f4efe4;
   border-color: rgba(244, 239, 228, 0.4);
+}
+
+.result-actions .result-buy {
+  min-height: 64px;
+  font-size: 16px;
+  letter-spacing: 0.14em;
+}
+
+.result-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.result-row .btn {
+  white-space: normal;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.result-sheet .footer {
+  margin-top: 40px;
+  padding-top: 8px;
 }
 
 @media (min-width: 840px) {
