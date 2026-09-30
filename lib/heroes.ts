@@ -16,6 +16,10 @@ export type Hero = {
   button: string;
   /** Короткая роль на экране коллажа */
   role: string;
+  /** Текст карточки «Что за водитель?» */
+  dossierRole: string;
+  dossierNote: string;
+  rideWith: string;
   traits: Trait[];
   tagline: string;
   awaits: string;
@@ -40,6 +44,10 @@ export const HEROES: Record<HeroId, Hero> = {
     withName: "Андреем Нагелем",
     button: "ЕДУ С НИМ",
     role: "Садится за руль и сразу жмёт газ",
+    dossierRole:
+      "Автомобильный энтузиаст. Готов ехать в Монако, даже если сначала придётся построить машину.",
+    dossierNote: "Авантюризм зашкаливает",
+    rideWith: "Еду с Андреем",
     traits: [
       { label: "Маршрут", value: "Монако, без остановок" },
       { label: "За рулём", value: "Обгон вместо тормоза" },
@@ -50,7 +58,7 @@ export const HEROES: Record<HeroId, Hero> = {
     shareText: "Я поеду на битву моторов с Иваном Янковским",
     friendTitle: "АНДРЕЙ НАГЕЛЬ — ВЫБОР ТВОЕГО ДРУГА",
     face: "/heroes/andrey-face.jpg",
-    figure: "/heroes/andrey-wide.jpg",
+    figure: "/heroes/andrey-figure.jpg",
     image: "/heroes/andrey-face.jpg",
     scene: "/heroes/andrey-scene.jpg",
     og: "/og/andrey.jpg",
@@ -62,6 +70,10 @@ export const HEROES: Record<HeroId, Hero> = {
     withName: "Дмитрием Бондаревым",
     button: "ЕДУ С НИМ",
     role: "Ведёт ровно. Нервничать будешь ты",
+    dossierRole:
+      "Инженер, создавший мотор „Руссо-Балта“. Знает, что делать, если приключение заглохнет.",
+    dossierNote: "Мотор под контролем",
+    rideWith: "Еду с Дмитрием",
     traits: [
       { label: "Маршрут", value: "Туда, куда договорились" },
       { label: "За рулём", value: "Мотор под контролем" },
@@ -72,7 +84,7 @@ export const HEROES: Record<HeroId, Hero> = {
     shareText: "Я поеду на битву моторов с Юрой Борисовым",
     friendTitle: "ДМИТРИЙ БОНДАРЕВ — ВЫБОР ТВОЕГО ДРУГА",
     face: "/heroes/dmitry-face.jpg",
-    figure: "/heroes/dmitry-wide.jpg",
+    figure: "/heroes/dmitry-figure.jpg",
     image: "/heroes/dmitry-face.jpg",
     scene: "/heroes/dmitry-figure.jpg",
     og: "/og/dmitry.jpg",

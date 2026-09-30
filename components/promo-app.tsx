@@ -17,27 +17,7 @@ import { Tachometer, VOTE_ANIM_MS } from "./tachometer";
 
 type Screen = "start" | "result" | "friend";
 type VotePhase = "anim" | "waiting" | "error";
-type RideStep = "gate" | "search" | "drivers" | "meter" | "route" | "card";
-
-const ROUTES = [
-  {
-    id: "near",
-    title: "Ближайший КАРО",
-    note: "Короткий маршрут до кинотеатра рядом",
-  },
-  {
-    id: "center",
-    title: "КАРО в центре",
-    note: "Большой зал, ехать дольше",
-  },
-  {
-    id: "night",
-    title: "Ночной сеанс",
-    note: "Поздний старт и пустые улицы",
-  },
-] as const;
-
-type RouteId = (typeof ROUTES)[number]["id"];
+type RideStep = "gate" | "search" | "drivers" | "meter" | "card";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -147,7 +127,7 @@ export function PromoApp({
 }) {
   const [screen, setScreen] = useState<Screen>(mode === "friend" ? "friend" : "start");
   const [step, setStep] = useState<RideStep>("gate");
-  const [routeId, setRouteId] = useState<RouteId | null>(null);
+  const [dossier, setDossier] = useState<HeroId | null>(null);
   const [selected, setSelected] = useState<HeroId | null>(null);
   const [stats, setStats] = useState<Counts | null>(initialStats);
   const [vote, setVote] = useState<{ hero: HeroId; phase: VotePhase } | null>(null);
@@ -169,7 +149,7 @@ export function PromoApp({
     }
     setScreen("start");
     setStep("gate");
-    setRouteId(null);
+    setDossier(null);
     window.scrollTo({ top: 0, behavior: "auto" });
   }
 
@@ -207,6 +187,7 @@ export function PromoApp({
     lock.current = true;
     setCopied(null);
     setVote(null);
+    setDossier(null);
     setStep("meter");
 
     let settled = false;
@@ -238,9 +219,9 @@ export function PromoApp({
       const data = (await response.json()) as { counts: Counts };
       setStats(data.counts);
       setSelected(hero);
-      setRouteId(null);
+      setDossier(null);
       setVote(null);
-      setStep("route");
+      setStep("card");
     } catch {
       setVote({ hero, phase: "error" });
       setStep("drivers");
@@ -277,16 +258,6 @@ export function PromoApp({
     setStep("search");
   }
 
-  function pickRoute(id: RouteId) {
-    if (lock.current) return;
-    lock.current = true;
-    setRouteId(id);
-    window.setTimeout(() => {
-      setStep("card");
-      lock.current = false;
-    }, reduced ? 200 : 1500);
-  }
-
   return (
     <>
       <button type="button" className="skip" onClick={() => setStep("drivers")}>
@@ -294,9 +265,6 @@ export function PromoApp({
       </button>
       {screen === "start" && step === "gate" ? (
         <section className="gate" aria-labelledby="gate-title">
-          <h1 id="gate-title" className="gate-title">
-            Битва моторов
-          </h1>
           <picture>
             <source media="(max-width: 839px)" type="image/webp" srcSet="/banners/mobile.webp" />
             <source media="(max-width: 839px)" srcSet="/banners/mobile.jpg" />
@@ -308,6 +276,9 @@ export function PromoApp({
             />
           </picture>
           <div className="gate-actions">
+            <h1 id="gate-title" className="gate-lead">
+              Выбери, с кем отправишься в поездку
+            </h1>
             <button type="button" className="btn gate-go" onClick={goDrivers}>
               <svg className="taxi-sign" viewBox="0 0 46 24" aria-hidden="true">
                 <rect x="0.6" y="0.6" width="44.8" height="22.8" rx="3.5" fill="#f5c518" stroke="#14110e" strokeWidth="1.2" />
@@ -327,7 +298,7 @@ export function PromoApp({
 
       {screen === "start" && step === "drivers" ? (
         <section className="drivers" id="vybor" aria-labelledby="drivers-title">
-          <p className="step-mark">Шаг 2 из 4</p>
+          <p className="step-mark">Шаг 2 из 3</p>
           <h2 id="drivers-title" className="drivers-title">
             Кто повезёт
           </h2>
@@ -335,13 +306,7 @@ export function PromoApp({
             {HERO_IDS.map((id) => {
               const hero = HEROES[id];
               return (
-                <button
-                  key={id}
-                  type="button"
-                  className="driver-card"
-                  disabled={vote !== null}
-                  onClick={() => void chooseWithWait(id)}
-                >
+                <article key={id} className="driver-card">
                   <img className="driver-face" src={hero.face} alt="" />
                   <div className="driver-main">
                     <p className="hero-name">{hero.name}</p>
@@ -350,9 +315,25 @@ export function PromoApp({
                       <Stars />
                       <TripCount stats={stats} hero={id} />
                     </p>
-                    <span className="card-cta">{hero.button}</span>
+                    <div className="card-actions">
+                      <button
+                        type="button"
+                        className="card-cta"
+                        disabled={vote !== null}
+                        onClick={() => void chooseWithWait(id)}
+                      >
+                        Еду с ним
+                      </button>
+                      <button
+                        type="button"
+                        className="card-cta card-cta-line"
+                        onClick={() => setDossier(id)}
+                      >
+                        Что за водитель?
+                      </button>
+                    </div>
                   </div>
-                </button>
+                </article>
               );
             })}
           </div>
@@ -361,21 +342,15 @@ export function PromoApp({
 
       {screen === "start" && step === "meter" ? <MeterStep reduced={reduced} /> : null}
 
-      {screen === "start" && step === "route" ? (
-        <RouteStep routeId={routeId} onPick={pickRoute} />
-      ) : null}
-
       {screen === "start" && step === "card" && selected ? (
         <Result
           hero={selected}
           stats={stats}
-          routeTitle={ROUTES.find((item) => item.id === routeId)?.title}
           onShare={() => openShare(selected)}
           onHome={goHome}
           onOther={() => {
             skipIntro.current = false;
             setShareOpen(false);
-            setRouteId(null);
             setStep("drivers");
           }}
           onReload={() => void reloadStats()}
@@ -395,6 +370,15 @@ export function PromoApp({
           manualText={manualUrl}
           onCopy={() => void copyShare(selected)}
           onClose={closeShare}
+        />
+      ) : null}
+
+      {dossier ? (
+        <DriverSheet
+          hero={dossier}
+          pending={vote !== null}
+          onClose={() => setDossier(null)}
+          onRide={(id) => void chooseWithWait(id)}
         />
       ) : null}
 
@@ -439,76 +423,94 @@ function MeterStep({ reduced }: { reduced: boolean }) {
   );
 }
 
-const ROUTE_PATHS: Record<RouteId | "ready", string> = {
-  ready: "M48 156 C 100 150, 120 70, 176 86 S 250 48, 300 58",
-  near: "M48 156 C 90 148, 130 110, 168 96 S 230 70, 300 58",
-  center: "M48 156 C 70 40, 150 28, 210 78 S 260 130, 300 58",
-  night: "M48 156 C 130 172, 190 150, 230 108 S 268 36, 300 58",
-};
-
-function RouteMap({ routeId }: { routeId: RouteId | null }) {
-  return (
-    <svg className="route-map" viewBox="0 0 360 200" role="img" aria-label="Маршрут до кинотеатра КАРО">
-      <rect width="360" height="200" rx="16" fill="#161310" />
-      {Array.from({ length: 6 }, (_, i) => (
-        <line key={`h${i}`} x1="16" y1={28 + i * 28} x2="344" y2={28 + i * 28} stroke="#2a261f" strokeWidth="1" />
-      ))}
-      {Array.from({ length: 8 }, (_, i) => (
-        <line key={`v${i}`} x1={28 + i * 44} y1="16" x2={28 + i * 44} y2="184" stroke="#2a261f" strokeWidth="1" />
-      ))}
-      <path
-        className="route-line"
-        d={ROUTE_PATHS[routeId ?? "ready"]}
-        fill="none"
-        stroke="#e91a3b"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      <circle cx="48" cy="156" r="6" fill="#f4efe4" />
-      <path d="M300 28c-7 0-13 6-13 13 0 10 13 22 13 22s13-12 13-22c0-7-6-13-13-13z" fill="#e91a3b" />
-      <circle cx="300" cy="40" r="4" fill="#161310" />
-      <text x="286" y="78" fill="#f4efe4" fontSize="12" fontFamily="inherit" letterSpacing="1.5">
-        КАРО
-      </text>
-    </svg>
-  );
-}
-
-function RouteStep({
-  routeId,
-  onPick,
+function DriverSheet({
+  hero,
+  pending,
+  onClose,
+  onRide,
 }: {
-  routeId: RouteId | null;
-  onPick: (id: RouteId) => void;
+  hero: HeroId;
+  pending: boolean;
+  onClose: () => void;
+  onRide: (id: HeroId) => void;
 }) {
+  const data = HEROES[hero];
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = dialogRef.current;
+    const previously = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    node?.querySelector<HTMLElement>(".hero-sheet-close")?.focus();
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !node) return;
+      const items = [...node.querySelectorAll<HTMLElement>("button")];
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+      previously?.focus();
+    };
+  }, [onClose]);
+
   return (
-    <section className="ride-step step-karo" aria-labelledby="route-title">
-      <p className="step-mark">Шаг 3 из 4</p>
-      <p className="karo-mark">КАРО</p>
-      <h2 id="route-title">Куда едем</h2>
-      <RouteMap key={routeId ?? "ready"} routeId={routeId} />
-      <div className="route-list">
-        {ROUTES.map((route) => (
+    <div className="overlay" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        className="hero-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dossier-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="hero-sheet-close" aria-label="Закрыть" onClick={onClose}>
+          ×
+        </button>
+        <img className="hero-sheet-figure" src={data.figure} alt={`${data.name}, ${data.actor}`} />
+        <div className="hero-sheet-copy">
+          <p id="dossier-title">
+            Имя: <strong>{data.name}</strong>
+          </p>
+          <p>
+            Актёр: <strong>{data.actor}</strong>
+          </p>
+          <p>Роль: {data.dossierRole}</p>
+          <p className="hero-sheet-note">{data.dossierNote}</p>
           <button
-            key={route.id}
             type="button"
-            className="route-pick"
-            disabled={routeId !== null}
-            onClick={() => onPick(route.id)}
+            className="btn"
+            disabled={pending}
+            onClick={() => onRide(hero)}
           >
-            <strong>{route.title}</strong>
-            <span>{route.note}</span>
+            {data.rideWith}
           </button>
-        ))}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
 
 function Result({
   hero,
   stats,
-  routeTitle,
   onShare,
   onOther,
   onReload,
@@ -516,7 +518,6 @@ function Result({
 }: {
   hero: HeroId;
   stats: Counts | null;
-  routeTitle?: string;
   onShare: () => void;
   onOther: () => void;
   onReload: () => void;
@@ -529,13 +530,12 @@ function Result({
     <article className="screen result-sheet" id="vybor">
       <img className={`scene scene-${hero}`} src={data.scene} alt={`${data.actor}, ${data.name}`} />
       <div className="screen-copy">
-        {routeTitle ? <p className="step-mark">Шаг 4 из 4</p> : null}
+        <p className="step-mark">Шаг 3 из 3</p>
         <HomeLogo src="/brand/logo.webp" className="logo screen-logo" onHome={onHome} />
         <p className="actor-line">{data.actor}</p>
         <h1>ТЫ ОТПРАВЛЯЕШЬСЯ В ПОЕЗДКУ С {data.withName.toUpperCase()}</h1>
         <p className="kicker">ТЕБЯ ЖДЁТ…</p>
         <p className="awaits">{data.awaits}</p>
-        {routeTitle ? <p className="route-chosen">Маршрут: {routeTitle}</p> : null}
         <ul className="traits">
           {data.traits.map((trait) => (
             <li key={trait.label}>
