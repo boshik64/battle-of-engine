@@ -485,7 +485,11 @@ function DriverSheet({
         <button type="button" className="hero-sheet-close" aria-label="Закрыть" onClick={onClose}>
           ×
         </button>
-        <img className="hero-sheet-figure" src={data.figure} alt={`${data.name}, ${data.actor}`} />
+        <img
+          className={hero === "andrey" ? "hero-sheet-figure is-still" : "hero-sheet-figure"}
+          src={data.figure}
+          alt={`${data.name}, ${data.actor}`}
+        />
         <div className="hero-sheet-copy">
           <p id="dossier-title">
             Имя: <strong>{data.name}</strong>
@@ -493,7 +497,7 @@ function DriverSheet({
           <p>
             Актёр: <strong>{data.actor}</strong>
           </p>
-          <p>Роль: {data.dossierRole}</p>
+          <p className="hero-sheet-role">Роль: {data.dossierRole}</p>
           <p className="hero-sheet-note">{data.dossierNote}</p>
           <button
             type="button"

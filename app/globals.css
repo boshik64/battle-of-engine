@@ -816,6 +816,15 @@ textarea.copy-link {
   background: #0c0b09;
 }
 
+.hero-sheet-figure.is-still {
+  object-fit: cover;
+  object-position: center 42%;
+}
+
+.hero-sheet-role {
+  white-space: pre-line;
+}
+
 .hero-sheet-copy {
   display: flex;
   flex-direction: column;
